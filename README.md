@@ -12,4 +12,7 @@ Adds Entra ID groups with a specific phrase to a defined Entra Application.
 ### [Delete empty folders](delete_empty_folders.ps1)
 Deletes all empty folders in the given path and in all sub folders.
 
+### [Robocopy examples](robocopy.md)
+Some Robocopy commands
+
 ## Bash
