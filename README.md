@@ -15,4 +15,8 @@ Deletes all empty folders in the given path and in all sub folders.
 #### [Robocopy examples](robocopy.md)
 Some Robocopy commands
 
+#### [Sharepoint Site Storage Limit](powershell/set_sharepoint_site_limit.ps1)
+Set a storage limit of 25GB for all sites which currently have a limit more than 1TB. It will also set the warning to 20GB
+
+
 ## Bash
