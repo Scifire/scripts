@@ -3,6 +3,9 @@ Helpful scripts I used the past
 
 ## Powershell
 
+#### [Copy User from one AD group to another](powershell/copy_group_users.ps1)
+Copy all users from AD group a to AD group B.
+
 #### [Copy AD Groups from a specific OU to Entra](powershell/copy_AD-group_Entra.ps1)
 Copies all groups from a specific OU to Entra, including members and description.
 
