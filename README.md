@@ -21,5 +21,7 @@ Some Robocopy commands
 #### [Sharepoint Site Storage Limit](powershell/set_sharepoint_site_limit.ps1)
 Set a storage limit of 25GB for all sites which currently have a limit more than 1TB. It will also set the warning to 20GB
 
+### [Find Email Adress in ExO](powershell/FindEmailAddress.ps1)
+Find a Mail address in Exchange Online (including additional proxy addresses)
 
 ## Bash
