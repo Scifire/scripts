@@ -21,7 +21,10 @@ Some Robocopy commands
 #### [Sharepoint Site Storage Limit](powershell/set_sharepoint_site_limit.ps1)
 Set a storage limit of 25GB for all sites which currently have a limit more than 1TB. It will also set the warning to 20GB
 
-### [Find Email Adress in ExO](powershell/FindEmailAddress.ps1)
+#### [Find Email Adress in ExO](powershell/FindEmailAddress.ps1)
 Find a Mail address in Exchange Online (including additional proxy addresses)
 
 ## Bash
+
+#### [FortiGate Certificate Comparison and Rotation Script](bash/bash/fgt_update_cert_vip.sh)
+This script automates the process of comparing SSL certificates used by a FortiGate Virtual Server (VIP) with a local certificate file. If the certificates differ, it uploads the new certificate to the FortiGate and updates the VIP to use it.
