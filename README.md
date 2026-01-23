@@ -26,5 +26,5 @@ Find a Mail address in Exchange Online (including additional proxy addresses)
 
 ## Bash
 
-#### [FortiGate Certificate Comparison and Rotation Script](bash/bash/fgt_update_cert_vip.sh)
+#### [FortiGate Certificate Comparison and Rotation Script](bash/fgt_update_cert_vip.sh)
 This script automates the process of comparing SSL certificates used by a FortiGate Virtual Server (VIP) with a local certificate file. If the certificates differ, it uploads the new certificate to the FortiGate and updates the VIP to use it.
