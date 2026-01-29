@@ -305,13 +305,13 @@ curl -k -X POST \
 echo "$upload_chain_resp" | jq .  
 
 # Fail hard unless status == success or http_status == 500 and error -328 (already exists)
-status="$(jq -r '.status // empty' <<<"$upload_chain_resp")"
+cert_status="$(jq -r '.status // empty' <<<"$upload_chain_resp")"
 http_status="$(jq -r '.http_status // empty' <<<"$upload_chain_resp")"
 error_code="$(jq -r '.error // .error_code // empty' <<<"$upload_chain_resp")"
 
-if [[ "$status" == "success" ]]; then
+if [[ "$cert_status" == "success" ]]; then
   echo "✅ Certificate chain upload succeeded."
-elif [[ "$status" == "error" && "$http_status" == "500" && "$error_code" == "-328" ]]; then
+elif [[ "$cert_status" == "error" && "$http_status" == "500" && "$error_code" == "-328" ]]; then
   echo "⚠️ Certificate chain already exists on FortiGate, continuing..."
 else
   echo "ERROR: FortiGate certificate chain import failed." >&2
