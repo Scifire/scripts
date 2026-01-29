@@ -5,18 +5,21 @@
 # This script automates the process of comparing SSL certificates used by a FortiGate (7.6.5)
 # Virtual Server (VIP) with a local certificate file. If the certificates differ, it
 # uploads the new certificate to the FortiGate and updates the VIP to use it.
+# It will also try to upload the chain cause it is required by Fortigate to present the chain to users.
+# Chain files must be cleaned up manually.
 #
 # Key Features:
 # - Fetches the current certificate from FortiGate via API
 # - Compares SHA256 fingerprints of the leaf certificates
 # - Uploads new certificate and private key if mismatch detected
+# - Uploads the new chain if it changed
 # - Updates the specified VIP to use the new certificate
 # - Cleans up old certificates older than 90 days (based on date in name)
 #
 # Prerequisites:
 # - jq, openssl, and curl must be installed
 # - API token with appropriate permissions for FortiGate
-# - Local certificate and private key files
+# - Local certificated, private key and chain files
 #
 # Usage: See the usage() function or run with --help
 #
@@ -26,7 +29,7 @@
 #
 #
 # This script was written with help of AI.
-
+#!/usr/bin/env bash
 set -euo pipefail
 
 die() {
@@ -43,6 +46,7 @@ Usage:
     --name <cert-name> \\
     --cert_base <cert-base-name> \\
     --cert_file <local-cert.pem> \\
+    --cert_chain <local-chain.pem> \\
     --privkey <local-privkey.pem> \\
     --token <api-token>
 
@@ -52,6 +56,7 @@ Options:
   --name  Certificate name on the FortiGate
   --cert_base  Base name for new certificate uploads
   --cert_file  Local certificate (e.g. fullchain.pem)
+  --cert_chain  Local certificate chain (e.g. chain.pem)
   --privkey  Local private key file (e.g. privkey.pem)
   --token API Token
   --vip_name  Virtual Server (VIP) name to update
@@ -62,12 +67,13 @@ Example:
     --name domain.example.date \\
     --cert_base domain.example \\
     --cert_file /etc/ssl/fullchain.pem \\
+    --cert_chain /etc/ssl/chain.pem \\
     --privkey /etc/ssl/privkey.pem \\
     --token ABCDEFG123456
     --vip_name Virtual Server name
 Exit Codes:
-  0  Certificates match
-  3  Certificates do not match 
+  0  Works as expected
+  1  Somehting did not work
 EOF
 }
 
@@ -80,6 +86,7 @@ CERT_NAME=""
 CERT_BASE=""
 LOCAL_FULLCHAIN=""
 PRIVKEY=""
+CHAIN=""
 TOKEN=""
 VIP_NAME=""
 DATASOURCE="1"
@@ -101,6 +108,8 @@ while [[ $# -gt 0 ]]; do
       LOCAL_FULLCHAIN="${2:-}"; shift 2 ;;
     --privkey)
       PRIVKEY="${2:-}"; shift 2 ;;
+    --cert_chain)
+      CHAIN="${2:-}"; shift 2 ;;
     --token)
       TOKEN="${2:-}"; shift 2 ;;
     --vip_name)
@@ -122,6 +131,8 @@ done
 [[ -f "$LOCAL_FULLCHAIN" ]] || die "File not found: $LOCAL_FULLCHAIN"
 [[ -n "$PRIVKEY" ]]         || die "--privkey is required"
 [[ -f "$PRIVKEY" ]]         || die "File not found: $PRIVKEY"
+[[ -n "$CHAIN" ]]         || die "--cert_chain is required"
+[[ -f "$CHAIN" ]]         || die "File not found: $CHAIN"
 [[ -n "$TOKEN" ]]         || die "--token is required"
 [[ -n "$VIP_NAME" ]]         || die "--Virtual Server name is required"
 
@@ -129,11 +140,9 @@ command -v jq >/dev/null 2>&1       || die "jq is required"
 command -v openssl >/dev/null 2>&1  || die "openssl is required"
 command -v curl >/dev/null 2>&1     || die "curl is required"
 
-
 # ------------------------
 # Get currently used Certificate on Virtual Server (VIP)
 # ------------------------
-
 CERT_NAME="$(curl -sk \
   "https://${FGT_HOST}/api/v2/cmdb/firewall/vip/${VIP_NAME}?vdom=${VDOM}" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -147,8 +156,6 @@ CERT_NAME="$(curl -sk \
 echo "==> FortiGate: ${FGT_HOST}"
 echo "==> VDOM: ${VDOM}"
 echo "==> Using certificate from VIP '${VIP_NAME}'"
-
-
 
 # ------------------------
 # Prepare
@@ -248,7 +255,7 @@ NEW_CERT_NAME="${CERT_BASE}.${stamp}"
 echo "==> New cert name: $NEW_CERT_NAME"
 
 # ------------------------
-# Upload new certificate and update VIP
+# Upload new certificate to FortiGate
 # ------------------------
 IMPORT_URL="https://${FGT_HOST}/api/v2/monitor/vpn-certificate/local/import?vdom=${VDOM}"
 
@@ -277,6 +284,40 @@ if [[ "$(echo "$upload_resp" | jq -r '.status // empty')" != "success" ]]; then
 fi
 
 echo "✅ Certificate upload succeeded."
+
+# ------------------------
+# Upload certificate chain to FortiGate
+# ------------------------
+IMPORT_URL="https://${FGT_HOST}/api/v2/monitor/vpn-certificate/ca/import?vdom=${VDOM}"
+
+upload_chain_resp="$(
+curl -k -X POST \
+  "$IMPORT_URL" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "import_method": "file",
+        "scope": "vdom",
+        "file_content": "'"$(base64 -w 0 "$CHAIN")"'"
+      }'
+)"  
+# Pretty print response
+echo "$upload_chain_resp" | jq .  
+
+# Fail hard unless status == success or http_status == 500 and error -328 (already exists)
+status="$(jq -r '.status // empty' <<<"$upload_chain_resp")"
+http_status="$(jq -r '.http_status // empty' <<<"$upload_chain_resp")"
+error_code="$(jq -r '.error // .error_code // empty' <<<"$upload_chain_resp")"
+
+if [[ "$status" == "success" ]]; then
+  echo "✅ Certificate chain upload succeeded."
+elif [[ "$status" == "error" && "$http_status" == "500" && "$error_code" == "-328" ]]; then
+  echo "⚠️ Certificate chain already exists on FortiGate, continuing..."
+else
+  echo "ERROR: FortiGate certificate chain import failed." >&2
+  echo "$upload_chain_resp" | jq . >&2
+  exit 1
+fi
 
 # ------------------------
 # Update Virtual Server (VIP) to use new certificate
@@ -334,7 +375,7 @@ curl -sk "$CERT_LIST_URL" \
     # Never delete the currently active certificate
     [[ -n "${CERT_NAME:-}" && "$cert_name" == "$CERT_NAME" ]] && continue
 
-    # Extract YYYYMMDD from cert name (e.g. domain.example.20240123-141530)
+    # Extract YYYYMMDD from cert name (e.g. int.giata.de.20240123-141530)
     if [[ "$cert_name" =~ ([0-9]{8}) ]]; then
       cert_date="${BASH_REMATCH[1]}"
     else
@@ -362,4 +403,4 @@ curl -sk "$CERT_LIST_URL" \
     fi
 done
 fi
-exit 0  
+exit 0
